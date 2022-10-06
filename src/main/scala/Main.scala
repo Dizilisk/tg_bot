@@ -18,7 +18,7 @@ import scala.util.Random
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp.Simple {
-  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
+  val token: String = ""
   val storage: Map[Long, String] = Map(0L -> "test")
   val numbers: Regex = "[1-9]".r
   val buf: ListBuffer[Sticker] = scala.collection.mutable.ListBuffer.empty[Sticker]
