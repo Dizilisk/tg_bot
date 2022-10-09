@@ -7,9 +7,13 @@ import canoe.models.messages.{AnimationMessage, StickerMessage, TelegramMessage,
 import canoe.syntax._
 import cats.syntax.functor._
 import cats.{Applicative, Functor, Monad}
-import cats.effect.{IO, IOApp}
+import cats.effect.{IO, IOApp, Sync}
 import cats.implicits.toTraverseOps
+import doobie.implicits.toSqlInterpolator
+import doobie.{ConnectionIO, Transactor}
 import fs2.{Pipe, Stream}
+import doobie.implicits._
+import cats.syntax.flatMap._
 
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
@@ -18,53 +22,58 @@ import scala.util.Random
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp.Simple {
-  val token: String = ""
+  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
   val storage: Map[Long, String] = Map(0L -> "test")
   val numbers: Regex = "[1-9]".r
   val buf: ListBuffer[Sticker] = scala.collection.mutable.ListBuffer.empty[Sticker]
   val mp = scala.collection.mutable.Map.empty[Long, String]
 
-  def run: IO[Unit] =
-    Stream
+  def run: IO[Unit] = for {
+    transactor <- IO (Transactor.fromDriverManager[IO](
+      "org.postgresql.Driver",
+      "jdbc:postgresql://localhost:5432/testdatabase",
+      "postgres",
+      "mysecretpassword"
+    ))
+    result <- Stream
       .resource(TelegramClient[IO](token))
-      .flatMap(implicit client => Bot.polling[IO].follow(echos).through(answerCallbacks))
+      .flatMap(implicit client => Bot.polling[IO].follow(echos(transactor)).through(answerCallbacks(transactor)))
       .compile
       .drain
+  } yield result
 
-  def echos[F[_] : TelegramClient : Monad]: Scenario[F, Unit] =
+  def echos[F[_] : TelegramClient : Sync](trans: Transactor[F]): Scenario[F, Unit] =
     for {
       msg <- Scenario.expect(any)
-      _ <- Scenario.eval(echoBack(msg))
+      _ <- Scenario.eval(echoBack(msg, trans))
     } yield ()
 
-  def echoBack[F[_] : TelegramClient : Monad](msg: TelegramMessage): F[Unit] = msg match {
+  def echoBack[F[_] : TelegramClient : Sync](msg: TelegramMessage, trans: Transactor[F]): F[Unit] = msg match {
     case textMessage: TextMessage => textMessage.text match {
+      case "database" => {
+        val request = sql"select pidor_id, text from testschema.pidordnya"
+          .query[(String, String)]
+          .to[List]
+        val get: F[List[(String, String)]] = request.transact(trans)
+        for {
+          unwrapGet <- get
+          _ <- msg.chat.send(s"@ + ${unwrapGet._2F}").void
+        } yield ()
+      }
       case "/hello" => msg.chat.send("Hi").void
       case "/roll" => msg.chat.send("Random", keyboard = rollingBtn).void
       case "/random" => msg.chat.send(s"${Random.nextInt(6)}").void
       case "/reply" => msg.chat.send("ReplyTest", keyboard = replyBtn).void
       case "/forward" => msg.chat.send("ForwardTest", keyboard = forwardBtn).void
       case "/link" => msg.chat.send("LinksTest", keyboard = linksBtn).void
-      case "/pay" => msg.chat.send("LongVal", keyboard = pay).void
-//      case _ => msg.chat.send("ti huy").void
+      case "/pay" => msg.chat.send("Donation", keyboard = pay).void
+      case _ => msg.chat.send("ti huy").void
     }
 
     case animationMessage: AnimationMessage => msg.chat.send(animationMessage.animation).void
     case stickerMessage: StickerMessage => msg.chat.send(stickerMessage.sticker).void
     case _ => msg.chat.send("Sorry! I can't echo that back.").void
 
-  }
-
-  def RandomSticker(list: ListBuffer[Sticker], random: Random): Sticker = {
-    list(random.nextInt(list.length))
-  }
-
-  def addSticker(list: ListBuffer[Sticker], item: Sticker): ListBuffer[Sticker] = {
-    list.addOne(item)
-  }
-
-  def removeSticker(list: ListBuffer[Sticker]): ListBuffer[Sticker] = {
-    ???
   }
 
   def sendSticker[F[_] : TelegramClient : Monad](item: TelegramMessage): Sticker = {
@@ -75,7 +84,7 @@ object Main extends IOApp.Simple {
     }
   }
 
-  def answerCallbacks[F[_] : Monad : TelegramClient]: Pipe[F, Update, Update] =
+  def answerCallbacks[F[_] : Sync : TelegramClient](trans: Transactor[F]): Pipe[F, Update, Update] =
     _.evalTap {
       case CallbackButtonSelected(_, query) =>
         query.data match {
@@ -87,6 +96,7 @@ object Main extends IOApp.Simple {
                 addToMap(id, name)
                 for {
                   _ <- query.message.traverse(_.chat.send(cbd))
+                  _ <- addToDB(id, name, trans)
                 } yield ()
               case "Удалено" =>
                 removeFromMap(id, name)
@@ -114,6 +124,13 @@ object Main extends IOApp.Simple {
   def addToMap(id: Long, name: String): String = {
     mp.update(id, name)
     "Добавлено"
+  }
+
+  def addToDB[F[_] : Sync](id: Long, name: String, trans: Transactor[F]): F[Int] = {
+    sql"insert into testschema.pidordnya values ($id, $name)"
+      .update
+      .run.transact(trans)
+
   }
 
   def removeFromMap(id: Long, name: String): String = {
@@ -176,6 +193,7 @@ object Main extends IOApp.Simple {
     List(callbackData("Рандом", "Рандом"),
       callbackData("Список", "Список")))
   val rollingBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(kbtest))
+
 
 }
 

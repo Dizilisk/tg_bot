@@ -23,6 +23,7 @@
     <orderEntry type="library" name="sbt: io.circe:circe-numbers_2.13:0.14.1:jar" level="project" />
     <orderEntry type="library" name="sbt: io.circe:circe-parser_2.13:0.14.1:jar" level="project" />
     <orderEntry type="library" name="sbt: org.augustjune:canoe_2.13:0.6.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.checkerframework:checker-qual:3.5.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.http4s:blaze-core_2.13:0.15.3:jar" level="project" />
     <orderEntry type="library" name="sbt: org.http4s:blaze-http_2.13:0.15.3:jar" level="project" />
     <orderEntry type="library" name="sbt: org.http4s:http4s-blaze-client_2.13:0.23.11:jar" level="project" />
@@ -36,16 +37,24 @@
     <orderEntry type="library" name="sbt: org.http4s:http4s-jawn_2.13:0.23.11:jar" level="project" />
     <orderEntry type="library" name="sbt: org.http4s:http4s-server_2.13:0.23.11:jar" level="project" />
     <orderEntry type="library" name="sbt: org.log4s:log4s_2.13:1.10.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.postgresql:postgresql:42.2.23:jar" level="project" />
     <orderEntry type="library" name="sbt: org.scala-js:scalajs-library_2.13:1.9.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.scala-lang.modules:scala-collection-compat_2.13:2.4.4:jar" level="project" />
     <orderEntry type="library" name="sbt: org.scala-lang:scala-library:2.13.9:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.scala-lang:scala-reflect:2.13.9:jar" level="project" />
     <orderEntry type="library" name="sbt: org.scodec:scodec-bits_2.13:1.1.30:jar" level="project" />
     <orderEntry type="library" name="sbt: org.slf4j:slf4j-api:1.7.36:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.tpolecat:doobie-core_2.13:1.0.0-RC1:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.tpolecat:doobie-free_2.13:1.0.0-RC1:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.tpolecat:doobie-postgres_2.13:1.0.0-RC1:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.tpolecat:typename_2.13:1.0.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:case-insensitive_2.13:1.2.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-core_2.13:2.7.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-core_sjs1_2.13:2.7.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-effect-kernel_2.13:3.3.11:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-effect-std_2.13:3.3.11:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-effect_2.13:3.3.11:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.typelevel:cats-free_2.13:2.6.1:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-kernel_2.13:2.7.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-kernel_sjs1_2.13:2.7.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.typelevel:cats-parse_2.13:0.3.6:jar" level="project" />
