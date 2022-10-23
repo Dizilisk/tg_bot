@@ -17,12 +17,12 @@ import cats.syntax.flatMap._
 
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
-import scala.util.Random
+import scala.util.{Random, Try}
 
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp.Simple {
-  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
+  val token: String = ""
   val storage: Map[Long, String] = Map(0L -> "test")
   val numbers: Regex = "[1-9]".r
   val buf: ListBuffer[Sticker] = scala.collection.mutable.ListBuffer.empty[Sticker]
@@ -31,9 +31,9 @@ object Main extends IOApp.Simple {
   def run: IO[Unit] = for {
     transactor <- IO (Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
-      "jdbc:postgresql://localhost:5432/testdatabase",
+      "jdbc:postgresql://localhost:8888/testdb",
       "postgres",
-      "mysecretpassword"
+      "123456"
     ))
     result <- Stream
       .resource(TelegramClient[IO](token))
@@ -51,15 +51,21 @@ object Main extends IOApp.Simple {
   def echoBack[F[_] : TelegramClient : Sync](msg: TelegramMessage, trans: Transactor[F]): F[Unit] = msg match {
     case textMessage: TextMessage => textMessage.text match {
       case "database" => {
-        val request = sql"select pidor_id, text from testschema.pidordnya"
-          .query[(String, String)]
-          .to[List]
-        val get: F[List[(String, String)]] = request.transact(trans)
         for {
-          unwrapGet <- get
-          _ <- msg.chat.send(s"@ + ${unwrapGet._2F}").void
+          unwrapGet <- getDB(trans)
+          _ <- msg.chat.send("@" + s"${unwrapGet._2F.head}").void
         } yield ()
       }
+      case "adddb" =>
+        test(trans)
+        msg.chat.send("added").void
+      case "deldb" => {
+        delAllDB(trans).void
+      }
+      case "showl" => for {
+        ss <- getDB(trans)
+        _ <- msg.chat.send(s"${ss}").void
+      } yield ()
       case "/hello" => msg.chat.send("Hi").void
       case "/roll" => msg.chat.send("Random", keyboard = rollingBtn).void
       case "/random" => msg.chat.send(s"${Random.nextInt(6)}").void
@@ -76,12 +82,12 @@ object Main extends IOApp.Simple {
 
   }
 
-  def sendSticker[F[_] : TelegramClient : Monad](item: TelegramMessage): Sticker = {
-    println("Отправь стикер")
-    item match {
-      case sticker: StickerMessage => sticker.sticker
-      case _ => sendSticker(item)
-    }
+  def getDB[F[_] : TelegramClient : Sync](trans: Transactor[F]): F[List[(String, String)]] = {
+    val request = sql"select pidor_id, name from testshema.pidordnya"
+      .query[(String, String)]
+      .to[List]
+    val get: F[List[(String, String)]] = request.transact(trans)
+    get
   }
 
   def answerCallbacks[F[_] : Sync : TelegramClient](trans: Transactor[F]): Pipe[F, Update, Update] =
@@ -90,7 +96,10 @@ object Main extends IOApp.Simple {
         query.data match {
           case Some(cbd) =>
             val id = query.from.id
-            val name = query.from.username.get
+            val name = if (query.from.username.isEmpty) {
+              Try(query.from.firstName).get
+            }
+            else query.from.username.get
             cbd match {
               case "Добавлено" =>
                 addToMap(id, name)
@@ -102,6 +111,7 @@ object Main extends IOApp.Simple {
                 removeFromMap(id, name)
                 for {
                   _ <- query.message.traverse(_.chat.send(cbd))
+                  _ <- delFromDB(id, trans)
                 } yield ()
               case "Рандом" =>
                 for {
@@ -127,7 +137,29 @@ object Main extends IOApp.Simple {
   }
 
   def addToDB[F[_] : Sync](id: Long, name: String, trans: Transactor[F]): F[Int] = {
-    sql"insert into testschema.pidordnya values ($id, $name)"
+    sql"insert into testshema.pidordnya values ($id, $name)"
+      .update
+      .run.transact(trans)
+
+  }
+  def test[F[_] : Sync](trans: Transactor[F]): F[Int] = {
+    val x: Long = 11111111
+    val y: String = "testname"
+    sql"insert into testshema.pidordnya values ($x, $y)"
+      .update
+      .run.transact(trans)
+
+  }
+
+  def delFromDB[F[_] : Sync](id: Long, trans: Transactor[F]): F[Int] = {
+    sql"delete from testshema.pidordnya where pidor_id = $id"
+      .update
+      .run.transact(trans)
+
+  }
+
+  def delAllDB[F[_] : Sync](trans: Transactor[F]): F[Int] = {
+    sql"delete from testshema.pidordnya"
       .update
       .run.transact(trans)
 
@@ -164,6 +196,17 @@ object Main extends IOApp.Simple {
     }
   }
 
+  def randomFromDB[F[_] : Sync](trans: Transactor[F]): F[List[String]] = {
+    val request = sql"select name from testshema.pidordnya"
+      .query[String]
+      .to[List]
+    val get = request.transact(trans)
+    val x: F[List[String]] = for {
+      s <- get
+    } yield s
+    val y: F[List[String]] = x
+    y
+  }
 
   val forward: InlineKeyboardButton = switchInlineQuery("test", "")
   val swInlineQ: InlineKeyboardMarkup = singleButton(forward)
