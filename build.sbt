@@ -12,3 +12,7 @@ libraryDependencies += "org.augustjune" %% "canoe" % "0.6.0"
 libraryDependencies += "org.tpolecat" %% "doobie-core" % "1.0.0-RC1"
 
 libraryDependencies += "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC1"
+
+libraryDependencies += "org.typelevel" %% "log4cats-slf4j"   % "2.5.0"
+
+libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.4" % Runtime

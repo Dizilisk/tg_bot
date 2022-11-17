@@ -22,7 +22,7 @@ import scala.util.{Random, Try}
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp.Simple {
-  val token: String = ""
+  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
   val storage: Map[Long, String] = Map(0L -> "test")
   val numbers: Regex = "[1-9]".r
   val buf: ListBuffer[Sticker] = scala.collection.mutable.ListBuffer.empty[Sticker]
@@ -56,9 +56,9 @@ object Main extends IOApp.Simple {
           _ <- msg.chat.send("@" + s"${unwrapGet._2F.head}").void
         } yield ()
       }
-      case "adddb" =>
-        test(trans)
-        msg.chat.send("added").void
+      case "adddb" => {
+       msg.chat.send(test(trans) + "Добавлено").void
+      }
       case "deldb" => {
         delAllDB(trans).void
       }
@@ -142,10 +142,13 @@ object Main extends IOApp.Simple {
       .run.transact(trans)
 
   }
+
   def test[F[_] : Sync](trans: Transactor[F]): F[Int] = {
-    val x: Long = 11111111
-    val y: String = "testname"
-    sql"insert into testshema.pidordnya values ($x, $y)"
+
+//    val x: Long = 11111111
+//    val y: String = "testname"
+
+    sql"insert into testshema.pidordnya values (11111111, 'testname')"
       .update
       .run.transact(trans)
 
