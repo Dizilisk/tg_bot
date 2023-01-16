@@ -1,19 +1,22 @@
 import canoe.api._
 import canoe.api.models.Keyboard
-import canoe.models.InlineKeyboardButton.{callbackData, pay, switchInlineQuery, switchInlineQueryCurrentChat, url}
+import canoe.models.InlineKeyboardButton.{callbackData, switchInlineQuery, switchInlineQueryCurrentChat, url}
 import canoe.models.InlineKeyboardMarkup.singleButton
-import canoe.models.{CallbackButtonSelected, CallbackQuery, Chat, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, PrivateChat, ReplyMarkup, Sticker, Update, User}
 import canoe.models.messages.{AnimationMessage, StickerMessage, TelegramMessage, TextMessage}
+import canoe.models._
 import canoe.syntax._
-import cats.syntax.functor._
-import cats.{Applicative, Functor, Monad}
-import cats.effect.{IO, IOApp, Sync}
+import cats.Applicative
+import cats.data.EitherT
+import cats.effect.{Async, IO, IOApp, LiftIO, Sync}
+import cats.free.Free
 import cats.implicits.toTraverseOps
-import doobie.implicits.toSqlInterpolator
-import doobie.{ConnectionIO, Transactor}
-import fs2.{Pipe, Stream}
-import doobie.implicits._
 import cats.syntax.flatMap._
+import cats.syntax.applicative._
+import cats.syntax.functor._
+import doobie.Transactor
+import doobie.free.connection
+import doobie.implicits._
+import fs2.{Pipe, Stream}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
@@ -29,7 +32,7 @@ object Main extends IOApp.Simple {
   val mp = scala.collection.mutable.Map.empty[Long, String]
 
   def run: IO[Unit] = for {
-    transactor <- IO (Transactor.fromDriverManager[IO](
+    transactor <- IO(Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
       "jdbc:postgresql://localhost:8888/testdb",
       "postgres",
@@ -50,22 +53,28 @@ object Main extends IOApp.Simple {
 
   def echoBack[F[_] : TelegramClient : Sync](msg: TelegramMessage, trans: Transactor[F]): F[Unit] = msg match {
     case textMessage: TextMessage => textMessage.text match {
-      case "database" => {
+      case "database" =>
         for {
           unwrapGet <- getDB(trans)
           _ <- msg.chat.send("@" + s"${unwrapGet._2F.head}").void
         } yield ()
-      }
-      case "adddb" => {
-       msg.chat.send(test(trans) + "Добавлено").void
-      }
-      case "deldb" => {
-        delAllDB(trans).void
-      }
+
+      case "deldb" => delAllDB(trans).void
+      case "selfdel" => delFromRPS(374489132L, trans).void
       case "showl" => for {
         ss <- getDB(trans)
-        _ <- msg.chat.send(s"${ss}").void
+        _ <- msg.chat.send(s"$ss").void
       } yield ()
+      case "clearrps" => delRpsDB(trans).void
+      case "gamestat" => for {
+        stat <- rpsStat(trans)
+        _ <- msg.chat.send(s"$stat").void
+      } yield ()
+
+      //      case "rpslb" => for {
+      //        res <- rpsLB(trans)
+      //        _ <- msg.chat.send(res).void
+      //      } yield ()
       case "/hello" => msg.chat.send("Hi").void
       case "/roll" => msg.chat.send("Random", keyboard = rollingBtn).void
       case "/random" => msg.chat.send(s"${Random.nextInt(6)}").void
@@ -73,6 +82,8 @@ object Main extends IOApp.Simple {
       case "/forward" => msg.chat.send("ForwardTest", keyboard = forwardBtn).void
       case "/link" => msg.chat.send("LinksTest", keyboard = linksBtn).void
       case "/pay" => msg.chat.send("Donation", keyboard = pay).void
+      case "/game" => msg.chat.send("Камень-Ножницы-Бумага", keyboard = rpsStart).void
+      case "Выбирай" => msg.chat.send("Выбирай", keyboard = rpsGameBtn).void
       case _ => msg.chat.send("ti huy").void
     }
 
@@ -121,6 +132,81 @@ object Main extends IOApp.Simple {
                 for {
                   _ <- query.message.traverse(_.chat.send(showList()))
                 } yield ()
+
+              case "Рега" => rpsStat(trans).flatMap {
+                z =>
+                  if (z.map(_._2).contains(id))
+                    for {
+                      _ <- query.message.traverse(_.chat.send("Выбирай", keyboard = rpsGameBtn))
+                    } yield ()
+                  else
+                    for {
+                      _ <- rpsReg(name, id, trans)
+                      _ <- query.message.traverse(_.chat.send("Выбирай", keyboard = rpsGameBtn))
+                    } yield ()
+              }
+
+              case "Камень" =>
+
+                for {
+                  res <- rps(id, cbd, trans)
+                  _ <- query.message.traverse(_.chat.send(res, keyboard = rpsGameBtn))
+                } yield ()
+              case "Ножницы" =>
+
+                for {
+                  res <- rps(id, cbd, trans)
+                  _ <- query.message.traverse(_.chat.send(res, keyboard = rpsGameBtn))
+                } yield ()
+              case "Бумага" =>
+
+                for {
+                  res <- rps(id, cbd, trans)
+                  _ <- query.message.traverse(_.chat.send(res, keyboard = rpsGameBtn))
+                } yield ()
+
+              case "Стата" => rpsStat(trans).flatMap {
+                z =>
+                  if (z.map(_._2).contains(id)) {
+                    for {
+                      res <- rpsSelf(id, trans)
+                      _ <- query.message.traverse(_.chat.send(s"Игрок @${res.head._1} \nПобеды: ${res.head._3} \nПоражениия: ${res.head._4}"))
+                    } yield ()
+                  }
+
+                  else {
+                    for {
+                      _ <- query.message.traverse(_.chat.send("Ты еще слиток", keyboard = rpsStart)).void
+                    } yield ()
+                  }
+              }
+
+
+              case "Топ10" => {
+                for {
+                  stat <- rpsStat(trans)
+                  name = stat.sortBy(_._3).take(10).reverse.zipWithIndex.foldLeft("") {
+                    case (acc, ((a, b, c), num)) => s"$acc\n${num + 1}. @$a - $c"
+                  }
+                  _ <- query.message.traverse(_.chat.send(name))
+                } yield ()
+              }
+
+              case "Слиток" => rpsStat(trans).flatMap {
+                z =>
+                  if (z.map(_._2).contains(id)) {
+                    for {
+                      del <- delFromRPS(id, trans)
+                      _ <- query.message.traverse(_.chat.send("Слиток", keyboard = rpsStart)).void
+                    } yield ()
+                  }
+                  else {
+                    for {
+                      _ <- query.message.traverse(_.chat.send("Ты уже слиток", keyboard = rpsStart)).void
+                    } yield ()
+                  }
+
+              }
               case _ =>
                 for {
                   _ <- query.message.traverse(_.chat.send(cbd))
@@ -140,19 +226,92 @@ object Main extends IOApp.Simple {
     sql"insert into testshema.pidordnya values ($id, $name)"
       .update
       .run.transact(trans)
-
   }
 
-  def test[F[_] : Sync](trans: Transactor[F]): F[Int] = {
-
-//    val x: Long = 11111111
-//    val y: String = "testname"
-
-    sql"insert into testshema.pidordnya values (11111111, 'testname')"
+  def delFromRPS[F[_] : Sync](id: Long, trans: Transactor[F]): F[Int] = {
+    sql"delete from testshema.rps_leaderboard where player_id = $id"
       .update
       .run.transact(trans)
-
   }
+
+  def rpsStat[F[_] : Sync](trans: Transactor[F]): F[List[(String, Long, Long)]] = {
+
+    val stat = sql"select player_name, player_id, win_counter from testshema.rps_leaderboard order by win_counter desc"
+      .query[(String, Long, Long)]
+      .to[List]
+    val show: F[List[(String, Long, Long)]] = stat.transact(trans)
+    show
+  }
+
+  def rpsSelf[F[_] : Sync](ID: Long, trans: Transactor[F]): F[List[(String, Long, Long, Long)]] = {
+
+    val stat = sql"select * from testshema.rps_leaderboard where player_id = $ID"
+      .query[(String, Long, Long, Long)]
+      .to[List]
+    val show: F[List[(String, Long, Long, Long)]] = stat.transact(trans)
+    show
+  }
+
+  def rpsReg[F[_] : Sync](pName: String, pID: Long, trans: Transactor[F]): F[Int] = {
+    sql"insert into testshema.rps_leaderboard (player_name, player_id) values ($pName, $pID)"
+      .update
+      .run.transact(trans)
+  }
+
+  def rps[F[_] : Sync](ID: Long, player: String, trans: Transactor[F]): F[String] = {
+    val wc: F[Int] = for {
+      winCount <- sql"select win_counter from testshema.rps_leaderboard where player_id = $ID"
+        .query[Int]
+        .to[List].transact(trans)
+        .map(_.headOption.getOrElse(0))
+    } yield winCount
+    val lc: F[Int] = for {
+      loseCount <- sql"select lose_counter from testshema.rps_leaderboard where player_id = $ID"
+        .query[Int]
+        .to[List].transact(trans)
+        .map(_.headOption.getOrElse(0))
+    } yield loseCount
+
+    val r = "Камень"
+    val p = "Бумага"
+    val s = "Ножницы"
+    val bot: List[String] = List(r, p, s)
+    val botGet: String = bot(Random.nextInt(bot.length))
+    player match {
+      case win if (player == r && botGet == s) ||
+        (player == p && botGet == r) ||
+        (player == s && botGet == p) =>
+
+        println("win_counter")
+        for {
+          wcc <- wc
+          count = wcc + 1
+          _ <- sql"update testshema.rps_leaderboard set win_counter = $count where player_id = $ID"
+            .update
+            .run.transact(trans)
+          res = s"Игрок ($win) победил противника ($botGet)"
+        } yield res
+
+
+      case lose if (player == s && botGet == r) ||
+        (player == r && botGet == p) ||
+        (player == p && botGet == s) =>
+
+        println("lose_counter")
+        for {
+          lcc <- lc
+          count = lcc + 1
+          _ <- sql"update testshema.rps_leaderboard set lose_counter = $count where player_id = $ID"
+            .update
+            .run.transact(trans)
+          res = s"Противник ($botGet) победил игрока ($lose)"
+        } yield res
+
+      case _ if player == botGet => "Ничья".pure[F]
+      case _ => "Пусто".pure[F]
+    }
+  }
+
 
   def delFromDB[F[_] : Sync](id: Long, trans: Transactor[F]): F[Int] = {
     sql"delete from testshema.pidordnya where pidor_id = $id"
@@ -163,6 +322,12 @@ object Main extends IOApp.Simple {
 
   def delAllDB[F[_] : Sync](trans: Transactor[F]): F[Int] = {
     sql"delete from testshema.pidordnya"
+      .update
+      .run.transact(trans)
+  }
+
+  def delRpsDB[F[_] : Sync](trans: Transactor[F]): F[Int] = {
+    sql"delete from testshema.rps_leaderboard"
       .update
       .run.transact(trans)
 
@@ -240,6 +405,15 @@ object Main extends IOApp.Simple {
       callbackData("Список", "Список")))
   val rollingBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(kbtest))
 
+  val rpsGame: List[List[InlineKeyboardButton]] = List(List(callbackData("Камень", "Камень"),
+    callbackData("Ножницы", "Ножницы"),
+    callbackData("Бумага", "Бумага")))
+  val rpsGameBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGame))
 
+  val rpsGameReg: List[List[InlineKeyboardButton]] = List(List(callbackData("Начать", "Рега"),
+    callbackData("Статистика", "Стата")),
+    List(callbackData("Топ 10", "Топ10"), callbackData("Покинуть игру", "Слиток")))
+
+  val rpsStart: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGameReg))
 }
 
