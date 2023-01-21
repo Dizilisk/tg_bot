@@ -9,19 +9,19 @@ import repositories.rawmodel.{Allstat, Selfstat}
 
 class RpsRepo[F[_] : Sync](trans: Transactor[F]) {
 
-  def rpsReg(name: String, id: Long): F[Int] = {
+  def reg(name: String, id: Long): F[Int] = {
     sql"insert into testshema.rps_leaderboard (player_name, player_id) values ($name, $id)"
       .update
       .run.transact(trans)
   }
 
-  def rpsStat: F[List[Allstat]] = {
-    sql"select player_name, player_id, win_counter from testshema.rps_leaderboard order by win_counter desc"
+  def stat: F[List[Allstat]] = {
+    sql"select player_name, player_id, win_counter, lose_counter from testshema.rps_leaderboard order by win_counter desc"
       .query[Allstat]
       .to[List].transact(trans)
   }
 
-  def rpsSelf(id: Long): F[Option[Selfstat]] = {
+  def self(id: Long): F[Option[Selfstat]] = {
     sql"select * from testshema.rps_leaderboard where player_id = $id"
       .query[Selfstat].option
       .transact(trans)
@@ -33,15 +33,15 @@ class RpsRepo[F[_] : Sync](trans: Transactor[F]) {
       .run.transact(trans)
   }
 
-  def winCount(ID: Long): F[Int] = {
-    sql"select win_counter from testshema.rps_leaderboard where player_id = $ID"
+  def winCount(id: Long): F[Int] = {
+    sql"select win_counter from testshema.rps_leaderboard where player_id = $id"
       .query[Int]
       .to[List].transact(trans)
       .map(_.headOption.getOrElse(0))
   }
 
-  def loseCount(ID: Long): F[Int] = {
-    sql"select lose_counter from testshema.rps_leaderboard where player_id = $ID"
+  def loseCount(id: Long): F[Int] = {
+    sql"select lose_counter from testshema.rps_leaderboard where player_id = $id"
       .query[Int]
       .to[List].transact(trans)
       .map(_.headOption.getOrElse(0))
