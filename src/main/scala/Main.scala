@@ -13,7 +13,7 @@ import cats.implicits.toTraverseOps
 import cats.syntax.flatMap._
 import cats.syntax.applicative._
 import cats.syntax.functor._
-import domain.{LoseGame, TopPlayers, WinGame}
+import domain.{LoseGame, TopPlayers, UserInfo, WinGame}
 import doobie.Transactor
 import doobie.free.connection
 import doobie.implicits._
@@ -24,7 +24,9 @@ import repositories.rawmodel.Allstat
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
 import scala.util.{Random, Try}
-import services.{AlreadyDeleted, Keyboards, MessageServices, Program, RpsStorageServices, Successful}
+import services.{AlreadyDeleted, Keyboards, MessageServices, Program, RpsStorageServices, SqlDbEvolution, Successful}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
@@ -42,13 +44,14 @@ object Main extends IOApp.Simple {
       "postgres",
       "123456"
     ))
+    _ <- IO.fromFuture(IO(SqlDbEvolution().runEvolutions()))
     repo = new RpsRepo[IO](transactor)
     service = new RpsStorageServices[IO](repo)
     msgService = new MessageServices[IO](service)
     program = new Program[IO](service, msgService)
     result <- Stream
       .resource(TelegramClient[IO](token))
-      .flatMap(implicit client => Bot.polling[IO].follow(echos(program)).through(answerCallbacks(service, program)))
+      .flatMap(implicit client => Bot.polling[IO].follow(echos(program)).through(answerCallbacks(program)))
       .compile
       .drain
   } yield result
@@ -59,8 +62,15 @@ object Main extends IOApp.Simple {
       _ <- Scenario.eval(echoBack(msg, program))
     } yield ()
 
-  def echoBack[F[_] : TelegramClient : Sync](msg: TelegramMessage, program: Program[F]): F[Unit] = msg match {
+  def echoBack[F[_] : TelegramClient : Sync](msg: TelegramMessage, program: Program[F]): F[Unit] = {
+    val getChat = msg.chat
+    val isPrivate = getChat match {
+      case PrivateChat(id, username, firstName, lastName) => true
+      case _ => false
+    }
+    msg match {
     case textMessage: TextMessage => textMessage.text match {
+
       case "/hello" => program.greetings(msg.chat)
       case "/random" => program.randomNumber(msg.chat)
       case "/roll" => program.randomUserButton(msg.chat)
@@ -68,7 +78,7 @@ object Main extends IOApp.Simple {
       case "/forward" => program.forwardButton(msg.chat)
       case "/link" => program.linkButton(msg.chat)
       case "/pay" => program.payButton(msg.chat)
-      case "/game" => program.rpsStart(msg.chat)
+      case "/game" => program.rpsStart(isPrivate, msg.chat)
       case _ => program.other(msg.chat)
     }
 
@@ -76,6 +86,7 @@ object Main extends IOApp.Simple {
     case stickerMessage: StickerMessage => msg.chat.send(stickerMessage.sticker).void
     case _ => msg.chat.send("Sorry! I can't echo that back.").void
 
+  }
   }
 
   def getDB[F[_] : TelegramClient : Sync](trans: Transactor[F]): F[List[(String, String)]] = {
@@ -86,26 +97,31 @@ object Main extends IOApp.Simple {
     get
   }
 
-  def answerCallbacks[F[_] : Sync : TelegramClient](services: RpsStorageServices[F], program: Program[F]): Pipe[F, Update, Update] = {
+  def answerCallbacks[F[_] : Sync : TelegramClient](program: Program[F]): Pipe[F, Update, Update] = {
 
     _.evalTap {
       case CallbackButtonSelected(_, query) =>
         query.data match {
           case Some(cbd) =>
-            val chat = query.message.get.chat
-            val id = query.from.id
-            val name = if (query.from.username.isEmpty) {
-              Try(query.from.firstName).get
+
+            val chat: Chat = query.message.get.chat
+            val isPrivate = chat match {
+              case PrivateChat(id, username, firstName, lastName) => true
+              case _ => false
             }
-            else query.from.username.get
+            val id = query.from.id
+            val username = query.from.username
+            val firstName = query.from.firstName
+            val lastName = query.from.lastName
+            val userInfo = UserInfo(id, username, firstName, lastName)
             cbd match {
               case "Добавлено" =>
-                addToMap(id, name)
+                addToMap(id, firstName)
                 for {
                   _ <- query.message.traverse(_.chat.send(cbd))
                 } yield ()
               case "Удалено" =>
-                removeFromMap(id, name)
+                removeFromMap(id, firstName)
                 for {
                   _ <- query.message.traverse(_.chat.send(cbd))
                 } yield ()
@@ -119,21 +135,21 @@ object Main extends IOApp.Simple {
                 } yield ()
 
 
-              case "Рега" => program.userReg(chat, name, id)
+              case "Рега" => program.userReg(chat.id, chat, userInfo)
 
-              case "Камень" => program.rock(chat, id, cbd)
+              case "Камень" => program.rock(chat.id, chat, id, cbd)
 
-              case "Ножницы" => program.scissors(chat, id, cbd)
+              case "Ножницы" => program.scissors(chat.id, chat, id, cbd)
 
-              case "Бумага" => program.paper(chat, id, cbd)
+              case "Бумага" => program.paper(chat.id, chat, id, cbd)
 
-              case "Стата" => program.userStat(chat, id)
+              case "Стата" => program.userStat(isPrivate, chat.id, chat, id)
 
-              case "Топ10" => program.userTop(chat)
+              case "Топ10" => program.userTop(isPrivate, chat.id, chat)
 
-              case "Слиток" => program.userLeave(chat, id)
+              case "Слиток" => program.userLeave(isPrivate, chat.id, chat, id)
 
-              case "Назад" => program.backToMaimMenu(chat)
+              case "Назад" => program.backToMaimMenu(isPrivate, chat)
 
               case _ => program.echoBack(chat, cbd)
             }
@@ -196,47 +212,4 @@ object Main extends IOApp.Simple {
       "@" + y(Random.nextInt(y.length))
     }
   }
-
-  val forward: InlineKeyboardButton = switchInlineQuery("test", "")
-  val swInlineQ: InlineKeyboardMarkup = singleButton(forward)
-  val forwardBtn: Keyboard.Inline = Keyboard.Inline(swInlineQ)
-
-  val pay: Keyboard.Inline = Keyboard.Inline(
-    InlineKeyboardMarkup.singleButton(
-      callbackData("pay", "Work in progress...")))
-
-  val buttontest: InlineKeyboardButton = switchInlineQueryCurrentChat("test", "")
-  val swinlineQCC: InlineKeyboardMarkup = singleButton(buttontest)
-  val replyBtn: Keyboard.Inline = Keyboard.Inline(swinlineQCC)
-
-
-  val kbURL: InlineKeyboardButton = url("Google", "https://www.google.com/")
-  val markup: InlineKeyboardMarkup = singleButton(kbURL)
-
-
-  val links: List[List[InlineKeyboardButton]] = List(List(url("Google", "https://www.google.com/"),
-    url("Youtube", "https://www.youtube.com/")),
-    List(url("Pornhub", "https://rt.pornhub.com")))
-  val linksBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(links))
-
-
-  val kbtest: List[List[InlineKeyboardButton]] = List(List(callbackData("Добавить", "Добавлено"),
-    callbackData("Удалить", "Удалено")),
-    List(callbackData("Рандом", "Рандом"),
-      callbackData("Список", "Список")))
-  val rollingBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(kbtest))
-
-  val rpsGame: List[List[InlineKeyboardButton]] = List(List(callbackData("Камень", "Камень"),
-    callbackData("Ножницы", "Ножницы"),
-    callbackData("Бумага", "Бумага")),
-    List(callbackData("Назад", "Назад")))
-  val rpsGameBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGame))
-
-  val rpsGameReg: List[List[InlineKeyboardButton]] = List(List(callbackData("Начать", "Рега"),
-    callbackData("Статистика", "Стата")),
-    List(callbackData("Топ 10", "Топ10"), callbackData("Покинуть игру", "Слиток")))
-
-  val rpsStart: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGameReg))
-
 }
-

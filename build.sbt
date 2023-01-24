@@ -16,3 +16,5 @@ libraryDependencies += "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC1"
 libraryDependencies += "org.typelevel" %% "log4cats-slf4j"   % "2.5.0"
 
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.5" % Runtime
+
+libraryDependencies += "org.flywaydb" % "flyway-core" % "9.12.0"

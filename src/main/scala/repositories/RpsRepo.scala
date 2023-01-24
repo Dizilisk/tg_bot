@@ -1,66 +1,91 @@
 package repositories
 
+import canoe.api.models.ChatApi
 import cats.effect.Sync
 import doobie.implicits.toSqlInterpolator
 import doobie.util.transactor.Transactor
 import doobie.implicits._
 import cats.syntax.functor._
-import repositories.rawmodel.{Allstat, Selfstat}
+import domain.{UserInfo, Userlist}
+import repositories.rawmodel.RpsStat
 
 class RpsRepo[F[_] : Sync](trans: Transactor[F]) {
 
-  def reg(name: String, id: Long): F[Int] = {
-    sql"insert into testshema.rps_leaderboard (player_name, player_id) values ($name, $id)"
+  def reg(userInfo: UserInfo): F[Int] = {
+    sql"""insert into baka_bot.users
+          (user_id, user_name, first_name, last_name)
+           values
+           (${userInfo.userId}, ${userInfo.username}, ${userInfo.firstName}, ${userInfo.lastName})
+           on conflict (user_id) do nothing
+           """
       .update
       .run.transact(trans)
   }
 
-  def stat: F[List[Allstat]] = {
-    sql"select player_name, player_id, win_counter, lose_counter from testshema.rps_leaderboard order by win_counter desc"
-      .query[Allstat]
+  def gamereg(chat: Long, userInfo: UserInfo): F[Int] = {
+    sql"""insert into baka_bot.game_stat
+          (chat_id, user_id)
+         values ($chat, ${userInfo.userId})
+       """
+      .update
+      .run.transact(trans)
+  }
+
+  def userList: F[List[Userlist]] = {
+    sql"select user_id, user_name, first_name from baka_bot.users"
+      .query[Userlist]
       .to[List].transact(trans)
   }
 
-  def self(id: Long): F[Option[Selfstat]] = {
-    sql"select * from testshema.rps_leaderboard where player_id = $id"
-      .query[Selfstat].option
-      .transact(trans)
+  def stat: F[List[RpsStat]] = {
+    sql"""select
+          us.user_id,
+          us.user_name,
+          us.first_name,
+          us.last_name,
+          gs.chat_id,
+          gs.win_count,
+          gs.lose_count
+          from baka_bot.users us join baka_bot.game_stat gs on gs.user_id = us.user_id
+          order by win_count desc"""
+      .query[RpsStat]
+      .to[List].transact(trans)
   }
 
-  def delFromRPS(id: Long): F[Int] = {
-    sql"delete from testshema.rps_leaderboard where player_id = $id"
+  def delFromRPS(chat_id: Long, id: Long): F[Int] = {
+    sql"delete from baka_bot.game_stat where user_id = $id and chat_id = $chat_id"
       .update
       .run.transact(trans)
   }
 
-  def winCount(id: Long): F[Int] = {
-    sql"select win_counter from testshema.rps_leaderboard where player_id = $id"
+  def winCount(chat_id: Long, id: Long): F[Int] = {
+    sql"select win_count from baka_bot.game_stat where user_id = $id and chat_id = $chat_id"
       .query[Int]
       .to[List].transact(trans)
       .map(_.headOption.getOrElse(0))
   }
 
-  def loseCount(id: Long): F[Int] = {
-    sql"select lose_counter from testshema.rps_leaderboard where player_id = $id"
+  def loseCount(chat_id: Long, id: Long): F[Int] = {
+    sql"select lose_count from baka_bot.game_stat where user_id = $id and chat_id = $chat_id"
       .query[Int]
       .to[List].transact(trans)
       .map(_.headOption.getOrElse(0))
   }
 
-  def updateWinCounter(id: Long, count: Int): F[Int] = {
-    sql"update testshema.rps_leaderboard set win_counter = $count where player_id = $id"
+  def updateWinCounter(chat_id: Long, id: Long, count: Int): F[Int] = {
+    sql"update baka_bot.game_stat set win_count = $count where user_id = $id and chat_id = $chat_id"
       .update
       .run.transact(trans)
   }
 
-  def updateLoseCounter(id: Long, count: Int): F[Int] = {
-    sql"update testshema.rps_leaderboard set lose_counter = $count where player_id = $id"
+  def updateLoseCounter(chat_id: Long, id: Long, count: Int): F[Int] = {
+    sql"update baka_bot.game_stat set lose_count = $count where user_id = $id and chat_id = $chat_id"
       .update
       .run.transact(trans)
   }
 
   def delRpsDB: F[Int] = {
-    sql"delete from testshema.rps_leaderboard"
+    sql"delete from baka_bot.game_stat"
       .update
       .run.transact(trans)
   }

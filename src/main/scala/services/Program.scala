@@ -2,66 +2,72 @@ package services
 
 import canoe.api.TelegramClient
 import canoe.api.models.ChatApi
+import canoe.models.Chat
 import cats.Monad
 import cats.syntax.flatMap._
 import cats.syntax.functor._
-import domain.{LoseGame, TopPlayers, WinGame}
-import repositories.rawmodel.Allstat
+import domain.{LoseGame, TopPlayers, UserInfo, WinGame}
+import repositories.rawmodel.RpsStat
 import services.Keyboards.{RpsKeyboard, SomeButton}
 
 import scala.util.Random
 
 class Program[F[_] : Monad](services: RpsStorageServices[F], msgServices: MessageServices[F]) {
 
-  def rpsStart(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def rpsStart(prv: Boolean, chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Камень-Ножницы-Бумага", RpsKeyboard.rpsGameStart)
+      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Камень-Ножницы-Бумага", RpsKeyboard.rpsGameStart(prv))
     } yield ()
   }
 
-  def userReg(chat: ChatApi, name: String, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def userReg(chat_id: Long, chat: ChatApi, userInfo: UserInfo)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      _ <- services.gameReg(name, id)
+      _ <- services.gameReg(chat_id, userInfo)
+      _ <- services.gameStatReg(chat_id, userInfo)
       _ <- msgServices.sendTextMessageWithKeyboard(chat, "Выбирай", RpsKeyboard.rpsGameButton)
     } yield ()
   }
 
-  def userStat(chat: ChatApi, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def userStat(prv: Boolean, chat_id: Long, chat: ChatApi, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      selfStat <- services.gameSelfStat(id).map(_.get).map {
-        allstat: Allstat => s"@${allstat.player_name} \nПобедs: ${allstat.win_counter} \nПоражения: ${allstat.lose_counter}"
-      }
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, selfStat, RpsKeyboard.rpsGameButton)
+      selfStat <- services.gameSelfStat(chat_id, id).map(_.map(
+        rpsstat => s"@${rpsstat.username.getOrElse(rpsstat.first_name)} \nПобед: ${rpsstat.win_count} \nПоражения: ${rpsstat.lose_count}"
+      ).getOrElse("Долбоеб"))
+      _ <- msgServices.sendTextMessageWithKeyboard(chat, selfStat, RpsKeyboard.rpsGameStart(prv))
     } yield ()
   }
 
-  def userTop(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def userTop(prv: Boolean, chat_id: Long, chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+
     for {
-      stat <- services.gameStat
-      position = stat.foldLeft("") {
-        case (str, TopPlayers(place, userName, wins)) => s"$str \n$place. @$userName - $wins побед"
-      }
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, position, RpsKeyboard.rpsGameButton)
+      stat <- services.gameStat(chat_id)
+      position = if (stat.isEmpty) {
+        "Все долбоебы"
+      } else
+        stat.foldLeft("Top 10") {
+          case (str, TopPlayers(place, userName, wins)) => s"$str \n$place. @$userName - $wins побед"
+        }
+      _ <- msgServices.sendTextMessageWithKeyboard(chat, position, RpsKeyboard.rpsGameStart(prv))
     } yield ()
   }
 
-  def userLeave(chat: ChatApi, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def userLeave(prv: Boolean, chat_id: Long, chat: ChatApi, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      del <- services.gameDel(id).map {
+      del <- services.gameDel(chat_id, id).map {
         case Successful => "Слиток"
         case AlreadyDeleted => "Ты ещё не в игре"
       }
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, del, RpsKeyboard.rpsGameButton)
+      _ <- msgServices.sendTextMessageWithKeyboard(chat, del, RpsKeyboard.rpsGameStart(prv))
     } yield ()
   }
 
-  def backToMaimMenu(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    msgServices.sendTextMessageWithKeyboard(chat, "Камень-Ножницы-Бумага", RpsKeyboard.rpsGameStart).void
+  def backToMaimMenu(prv: Boolean, chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+    msgServices.sendTextMessageWithKeyboard(chat, "Камень-Ножницы-Бумага", RpsKeyboard.rpsGameStart(prv)).void
   }
 
-  def rock(chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def rock(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      res <- services.rpsGame(id, choose).map {
+      res <- services.rpsGame(chat_id, id, choose).map {
         case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
         case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
         case _ => "Ничья"
@@ -70,9 +76,9 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], msgServices: Messag
     } yield ()
   }
 
-  def paper(chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def paper(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      res <- services.rpsGame(id, choose).map {
+      res <- services.rpsGame(chat_id, id, choose).map {
         case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
         case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
         case _ => "Ничья"
@@ -81,9 +87,9 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], msgServices: Messag
     } yield ()
   }
 
-  def scissors(chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def scissors(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
-      res <- services.rpsGame(id, choose).map {
+      res <- services.rpsGame(chat_id, id, choose).map {
         case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
         case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
         case _ => "Ничья"
@@ -147,7 +153,7 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], msgServices: Messag
   }
 
   def echoBack(chat: ChatApi, any: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for  {
+    for {
       _ <- msgServices.sendTextMessageOnly(chat, any)
     } yield ()
   }

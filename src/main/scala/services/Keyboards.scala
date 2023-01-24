@@ -9,7 +9,7 @@ object Keyboards {
 
   object RpsKeyboard {
 
-    def rpsGameStart: Keyboard = rpsStart
+    def rpsGameStart(isPrivate: Boolean): Keyboard = if (isPrivate) rpsStartPrivate else rpsStart
 
     def rpsGameButton: Keyboard = rpsGameBtn
 
@@ -24,6 +24,10 @@ object Keyboards {
       List(callbackData("Топ 10", "Топ10"), callbackData("Покинуть игру", "Слиток")))
     val rpsStart: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGameReg))
 
+    val rpsGameRegPrivate: List[List[InlineKeyboardButton]] = List(List(callbackData("Начать", "Рега"),
+      callbackData("Покинуть игру", "Слиток")),
+      List(callbackData("Статистика", "Стата")))
+    val rpsStartPrivate: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGameRegPrivate))
   }
 
   object SomeButton {
