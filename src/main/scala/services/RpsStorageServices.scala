@@ -1,6 +1,5 @@
 package services
 
-import canoe.api.models.ChatApi
 import cats.Monad
 import cats.implicits.catsSyntaxApplicativeId
 import repositories.RpsRepo
@@ -13,7 +12,7 @@ import scala.util.Random
 
 class RpsStorageServices[F[_] : Monad](rps: RpsRepo[F]) {
 
-  def gameReg(chat_id: Long, userInfo: UserInfo): F[Unit] = {
+  def gameReg(userInfo: UserInfo): F[Unit] = {
     rps.stat.flatMap {
       userList =>
         if (userList.map(_.user_id).contains(userInfo.userId)) ().pure

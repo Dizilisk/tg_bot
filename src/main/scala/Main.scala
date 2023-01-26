@@ -18,13 +18,13 @@ import doobie.Transactor
 import doobie.free.connection
 import doobie.implicits._
 import fs2.{Pipe, Stream}
-import repositories.RpsRepo
+import repositories.{PidorRepo, RpsRepo}
 import repositories.rawmodel.Allstat
 
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
 import scala.util.{Random, Try}
-import services.{AlreadyDeleted, Keyboards, MessageServices, Program, RpsStorageServices, SqlDbEvolution, Successful}
+import services.{AlreadyDeleted, Keyboards, MessageServices, PidorStorageServices, Program, RpsStorageServices, SqlDbEvolution, Successful}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -45,10 +45,12 @@ object Main extends IOApp.Simple {
       "123456"
     ))
     _ <- IO.fromFuture(IO(SqlDbEvolution().runEvolutions()))
-    repo = new RpsRepo[IO](transactor)
-    service = new RpsStorageServices[IO](repo)
+    rpsRepo = new RpsRepo[IO](transactor)
+    service = new RpsStorageServices[IO](rpsRepo)
+    pidorRepo = new PidorRepo[IO](transactor)
+    pidor = new PidorStorageServices[IO](pidorRepo)
     msgService = new MessageServices[IO](service)
-    program = new Program[IO](service, msgService)
+    program = new Program[IO](service, pidor, msgService)
     result <- Stream
       .resource(TelegramClient[IO](token))
       .flatMap(implicit client => Bot.polling[IO].follow(echos(program)).through(answerCallbacks(program)))
@@ -79,6 +81,7 @@ object Main extends IOApp.Simple {
       case "/link" => program.linkButton(msg.chat)
       case "/pay" => program.payButton(msg.chat)
       case "/game" => program.rpsStart(isPrivate, msg.chat)
+      case "/pidor" => program.pidorStart(isPrivate, msg.chat)
       case _ => program.other(msg.chat)
     }
 
@@ -150,6 +153,14 @@ object Main extends IOApp.Simple {
               case "Слиток" => program.userLeave(isPrivate, chat.id, chat, id)
 
               case "Назад" => program.backToMaimMenu(isPrivate, chat)
+
+              case "Пидор" => program.pidorGame(isPrivate, chat.id, chat, userInfo)
+
+              case "ПидорСтата" => program.pidorSelfStat(isPrivate, chat.id, chat, id)
+
+              case "Топ10Пидоров" => program.pidorStat(isPrivate, chat.id, chat)
+
+              case "Я не пидор" => program.pidorLeave(isPrivate, chat.id, chat, id)
 
               case _ => program.echoBack(chat, cbd)
             }

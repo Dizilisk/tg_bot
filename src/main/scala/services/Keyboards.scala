@@ -30,6 +30,21 @@ object Keyboards {
     val rpsStartPrivate: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(rpsGameRegPrivate))
   }
 
+  object PidorButton {
+
+    def pidorButton(isPrivate: Boolean): Keyboard = if (isPrivate) pidorBtnPrivate else pidorBtn
+
+    val pidorGame: List[List[InlineKeyboardButton]] = List(List(callbackData("Выбрать пидора", "Пидор"),
+      callbackData("Статистика", "ПидорСтата"), callbackData("Топ 10", "Топ10Пидоров")),
+      List(callbackData("Истина", "Сергей"), callbackData("Я не пидор", "Ты пидор")))
+    val pidorBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(pidorGame))
+
+    val pidorGamePrivate: List[List[InlineKeyboardButton]] = List(List(callbackData("Я пидор", "Пидор"),
+      callbackData("Статистика", "ПидорСтата")),
+      List(callbackData("Я не пидор", "Ты пидор")))
+    val pidorBtnPrivate: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(pidorGamePrivate))
+  }
+
   object SomeButton {
 
     def roll: Keyboard = rollingBtn

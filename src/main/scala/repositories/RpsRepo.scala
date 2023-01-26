@@ -1,12 +1,11 @@
 package repositories
 
-import canoe.api.models.ChatApi
 import cats.effect.Sync
 import doobie.implicits.toSqlInterpolator
 import doobie.util.transactor.Transactor
 import doobie.implicits._
 import cats.syntax.functor._
-import domain.{UserInfo, Userlist}
+import domain.UserInfo
 import repositories.rawmodel.RpsStat
 
 class RpsRepo[F[_] : Sync](trans: Transactor[F]) {
@@ -29,12 +28,6 @@ class RpsRepo[F[_] : Sync](trans: Transactor[F]) {
        """
       .update
       .run.transact(trans)
-  }
-
-  def userList: F[List[Userlist]] = {
-    sql"select user_id, user_name, first_name from baka_bot.users"
-      .query[Userlist]
-      .to[List].transact(trans)
   }
 
   def stat: F[List[RpsStat]] = {
