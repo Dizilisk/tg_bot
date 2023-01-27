@@ -18,3 +18,31 @@ libraryDependencies += "org.typelevel" %% "log4cats-slf4j"   % "2.5.0"
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.5" % Runtime
 
 libraryDependencies += "org.flywaydb" % "flyway-core" % "9.12.0"
+
+enablePlugins(DockerPlugin)
+
+//Packing jar
+assembly / mainClass := Some("Main")
+assembly / assemblyJarName := "baka_bot.jar"
+
+docker / dockerfile := {
+  new Dockerfile {
+    val artifact: File     = assembly.value
+    val artifactTargetPath = s"/app/${artifact.name}"
+    from("openjdk:8-jre")
+    add(artifact, artifactTargetPath)
+    entryPoint("java", "-jar", artifactTargetPath)
+  }
+}
+
+docker / imageNames := Seq(
+  ImageName(
+    namespace = Some("Dizi"),
+    repository = "local-proxy"
+  )
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", _*) => MergeStrategy.discard
+  case _                        => MergeStrategy.first
+}
