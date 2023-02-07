@@ -1,3 +1,3 @@
 package domain
 
-case class TopPlayers(place: Int, userName: String, wins: Long)
+case class TopPlayers(place: Int, userName: Option[String], first_name: String, wins: Long)

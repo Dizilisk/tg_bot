@@ -34,7 +34,7 @@ class RpsStorageServices[F[_] : Monad](rps: RpsRepo[F]) {
     for {
       stat <- rps.stat
       top = stat.filter(_.chat_id == chat_id).sortBy(_.win_count).take(10).reverse.zipWithIndex.map {
-        case (rpsstat, i) => TopPlayers(i + 1, rpsstat.username.getOrElse(rpsstat.first_name), rpsstat.win_count)
+        case (rpsstat, i) => TopPlayers(i + 1, rpsstat.username, rpsstat.first_name, rpsstat.win_count)
       }
     } yield top
   }

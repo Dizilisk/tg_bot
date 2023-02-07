@@ -44,47 +44,4 @@ object Keyboards {
       List(callbackData("Я не пидор", "Ты пидор")))
     val pidorBtnPrivate: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(pidorGamePrivate))
   }
-
-  object SomeButton {
-
-    def roll: Keyboard = rollingBtn
-
-    def forward: Keyboard = forwardBtn
-
-    def reply: Keyboard = replyBtn
-
-    def link: Keyboard = linksBtn
-
-    def randomUser: Keyboard = rollingBtn
-
-    val frw: InlineKeyboardButton = switchInlineQuery("test", "")
-    val swInlineQ: InlineKeyboardMarkup = singleButton(frw)
-    val forwardBtn: Keyboard.Inline = Keyboard.Inline(swInlineQ)
-
-    val pay: Keyboard.Inline = Keyboard.Inline(
-      InlineKeyboardMarkup.singleButton(
-        callbackData("pay", "Work in progress...")))
-
-
-    val buttontest: InlineKeyboardButton = switchInlineQueryCurrentChat("test", "")
-    val swinlineQCC: InlineKeyboardMarkup = singleButton(buttontest)
-    val replyBtn: Keyboard.Inline = Keyboard.Inline(swinlineQCC)
-
-
-    val kbURL: InlineKeyboardButton = url("Google", "https://www.google.com/")
-    val markup: InlineKeyboardMarkup = singleButton(kbURL)
-
-
-    val links: List[List[InlineKeyboardButton]] = List(List(url("Google", "https://www.google.com/"),
-      url("Youtube", "https://www.youtube.com/")),
-      List(url("Pornhub", "https://rt.pornhub.com")))
-    val linksBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(links))
-
-
-    val kbtest: List[List[InlineKeyboardButton]] = List(List(callbackData("Добавить", "Добавлено"),
-      callbackData("Удалить", "Удалено")),
-      List(callbackData("Рандом", "Рандом"),
-        callbackData("Список", "Список")))
-    val rollingBtn: Keyboard.Inline = Keyboard.Inline(InlineKeyboardMarkup(kbtest))
-  }
 }

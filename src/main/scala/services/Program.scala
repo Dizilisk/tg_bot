@@ -2,12 +2,13 @@ package services
 
 import canoe.api.TelegramClient
 import canoe.api.models.ChatApi
+import canoe.models.Chat
 import cats.Monad
 import cats.implicits.toTraverseOps
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import domain.{LoseGame, TopPidors, TopPlayers, UserInfo, WinGame}
-import services.Keyboards.{PidorButton, RpsKeyboard, SomeButton}
+import services.Keyboards.{PidorButton, RpsKeyboard}
 
 import java.time.{LocalDate, ZoneId}
 import scala.util.Random
@@ -31,7 +32,12 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
   def userStat(prv: Boolean, chat_id: Long, chat: ChatApi, id: Long)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
       selfStat <- services.gameSelfStat(chat_id, id).map(_.map(
-        rpsstat => s"@${rpsstat.username.getOrElse(rpsstat.first_name)} \nПобед: ${rpsstat.win_count} \nПоражения: ${rpsstat.lose_count}"
+        rpsstat => s"${
+          rpsstat.username match {
+            case Some(value) => "@" + value
+            case None => rpsstat.first_name + " " + rpsstat.last_name.getOrElse(" ")
+          }
+        } \nПобед: ${rpsstat.win_count} \nПоражения: ${rpsstat.lose_count}"
       ).getOrElse("Долбоеб"))
       _ <- msgServices.sendTextMessageWithKeyboard(chat, selfStat, RpsKeyboard.rpsGameStart(prv))
     } yield ()
@@ -45,7 +51,12 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
         "Все долбоебы"
       } else
         stat.foldLeft("Top 10") {
-          case (str, TopPlayers(place, userName, wins)) => s"$str \n$place. @$userName - $wins побед"
+          case (str, TopPlayers(place, userName, first_name, wins)) => s"$str \n$place. ${
+            userName match {
+              case Some(value) => "@" + value
+              case None => first_name
+            }
+          } - $wins побед"
         }
       _ <- msgServices.sendTextMessageWithKeyboard(chat, position, RpsKeyboard.rpsGameStart(prv))
     } yield ()
@@ -65,33 +76,63 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
     msgServices.sendTextMessageWithKeyboard(chat, "Камень-Ножницы-Бумага", RpsKeyboard.rpsGameStart(prv)).void
   }
 
-  def rock(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def rock(chat_id: Long, chat: ChatApi, user: UserInfo, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
       res <- services.rpsGame(chat_id, id, choose).map {
-        case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
-        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
+        case winGame: WinGame => s"${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${winGame.player}) победил противника (${winGame.bot})"
+        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил ${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${loseGame.player})"
         case _ => "Ничья"
       }
       _ <- msgServices.sendTextMessageWithKeyboard(chat, res, RpsKeyboard.rpsGameButton)
     } yield ()
   }
 
-  def paper(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def paper(chat_id: Long, chat: ChatApi, user: UserInfo, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
       res <- services.rpsGame(chat_id, id, choose).map {
-        case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
-        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
+        case winGame: WinGame => s"${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${winGame.player}) победил противника (${winGame.bot})"
+        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил ${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${loseGame.player})"
         case _ => "Ничья"
       }
       _ <- msgServices.sendTextMessageWithKeyboard(chat, res, RpsKeyboard.rpsGameButton)
     } yield ()
   }
 
-  def scissors(chat_id: Long, chat: ChatApi, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
+  def scissors(chat_id: Long, chat: ChatApi, user: UserInfo, id: Long, choose: String)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
       res <- services.rpsGame(chat_id, id, choose).map {
-        case winGame: WinGame => s"Игрок (${winGame.player}) победил противника (${winGame.bot})"
-        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил игрока (${loseGame.player})"
+        case winGame: WinGame => s"${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${winGame.player}) победил противника (${winGame.bot})"
+        case loseGame: LoseGame => s"Противник (${loseGame.bot}) победил ${
+          user.username match {
+            case Some(value) => "@" + value
+            case None => user.firstName
+          }
+        } (${loseGame.player})"
         case _ => "Ничья"
       }
       _ <- msgServices.sendTextMessageWithKeyboard(chat, res, RpsKeyboard.rpsGameButton)
@@ -121,8 +162,16 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
           println(existingPidor)
           pidor.pidorSelfStat(existingPidor.chat_id, existingPidor.user_id)
           .map {test =>
-            test.fold("Никого")(name => s"Пидор дня ${name.username.getOrElse(name.first_name)}")}
-        case None => selectPidorOfTheDay(chat_id, time).map(_.fold("Никого")(name => s"Пидор дня @${name.username.get}"))
+            test.fold("Никого")(name => name.username match {
+              case Some(value) => "Пидор дня @" + value
+              case None => "Пидор дня " + name.first_name
+            })}
+        case None => selectPidorOfTheDay(chat_id, time).map(_.fold("Никого")(name =>
+          name.username match {
+            case Some(value) => "Пидор дня @" + value
+            case None => "Пидор дня " + name.first_name
+          }
+        ))
       }
 
       _ <- msgServices.sendTextMessageWithKeyboard(chat, responseText, PidorButton.pidorButton(prv))
@@ -145,7 +194,12 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
         "Пидоров нету, но вы все равно пидоры"
       } else
         stat.foldLeft("Top 10") {
-          case (str, TopPidors(place, user_id, username, first_name, pidor_count)) => s"$str \n$place. ${username.getOrElse(first_name)} был пидором $pidor_count раз"
+          case (str, TopPidors(place, _, username, first_name, pidor_count)) => s"$str \n$place. ${
+            username match {
+              case Some(value) => "@" + value
+              case None => first_name
+            }
+          } был пидором $pidor_count раз"
         }
       _ <- msgServices.sendTextMessageWithKeyboard(chat, position,  PidorButton.pidorButton(prv))
     } yield ()
@@ -179,48 +233,6 @@ class Program[F[_] : Monad](services: RpsStorageServices[F], pidor: PidorStorage
   def randomNumber(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
     for {
       _ <- msgServices.sendTextMessageOnly(chat, s"${Random.nextInt(6)}")
-    } yield ()
-  }
-
-  def rollButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Random", SomeButton.roll)
-    } yield ()
-  }
-
-  def forwardButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Forward test", SomeButton.forward)
-    } yield ()
-  }
-
-  def replyButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Reply test", SomeButton.reply)
-    } yield ()
-  }
-
-  def linkButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Links", SomeButton.link)
-    } yield ()
-  }
-
-  def payButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Donation", SomeButton.pay)
-    } yield ()
-  }
-
-  def randomUserButton(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageWithKeyboard(chat, "Random", SomeButton.randomUser)
-    } yield ()
-  }
-
-  def other(chat: ChatApi)(implicit tgClient: TelegramClient[F]): F[Unit] = {
-    for {
-      _ <- msgServices.sendTextMessageOnly(chat, "Ты хуй")
     } yield ()
   }
 
