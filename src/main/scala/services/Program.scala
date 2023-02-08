@@ -2,7 +2,6 @@ package services
 
 import canoe.api.TelegramClient
 import canoe.api.models.ChatApi
-import canoe.models.Chat
 import cats.Monad
 import cats.implicits.toTraverseOps
 import cats.syntax.flatMap._

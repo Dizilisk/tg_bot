@@ -1,5 +1,5 @@
 import canoe.api._
-import canoe.models.messages.{AnimationMessage, StickerMessage, TelegramMessage, TextMessage}
+import canoe.models.messages.{TelegramMessage, TextMessage}
 import canoe.models._
 import canoe.syntax._
 import cats.Applicative
@@ -21,7 +21,7 @@ object Main extends IOApp.Simple {
   def run: IO[Unit] = for {
     transactor <- IO(Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
-      "jdbc:postgresql://localhost:8888/testdb",
+      "jdbc:postgresql://localhost:5432/testdb",
       "postgres",
       "123456"
     ))
