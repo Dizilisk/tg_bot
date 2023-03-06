@@ -21,9 +21,9 @@ object Main extends IOApp.Simple {
   def run: IO[Unit] = for {
     transactor <- IO(Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
-      "jdbc:postgresql://localhost:5432/testdb",
-      "postgres",
-      "123456"
+      "",
+      "",
+      ""
     ))
     _ <- IO.fromFuture(IO(SqlDbEvolution().runEvolutions()))
     rpsRepo = new RpsRepo[IO](transactor)
