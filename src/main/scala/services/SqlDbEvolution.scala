@@ -19,7 +19,7 @@ object SqlDbEvolution {
   def apply(): SqlDbEvolution = {
     lazy val flyway: Flyway = Flyway
       .configure()
-      .dataSource("jdbc:postgresql://localhost:8888/testdb", "postgres", "123456")
+      .dataSource("jdbc:postgresql://localhost:5432/testdb", "postgres", "123456")
       .locations("flyway")
       .load()
 

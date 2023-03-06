@@ -16,7 +16,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp.Simple {
-  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
+  val token: String = ""
 
   def run: IO[Unit] = for {
     transactor <- IO(Transactor.fromDriverManager[IO](
