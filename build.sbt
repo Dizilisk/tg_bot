@@ -17,7 +17,7 @@ libraryDependencies += "org.typelevel" %% "log4cats-slf4j"   % "2.5.0"
 
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.5" % Runtime
 
-libraryDependencies += "org.flywaydb" % "flyway-core" % "9.14.1"
+libraryDependencies += "org.flywaydb" % "flyway-core" % "9.10.0"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15" % Test
 
@@ -26,6 +26,8 @@ libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.17.0" % Test
 libraryDependencies += "org.scalatestplus" %% "scalacheck-1-14" % "3.2.2.0" % Test
 
 libraryDependencies += "org.scalamock" %% "scalamock" % "5.2.0" % Test
+
+libraryDependencies += "org.postgresql" % "postgresql" % "42.6.0"
 
 
 enablePlugins(DockerPlugin)
@@ -52,6 +54,11 @@ docker / imageNames := Seq(
 )
 
 assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", _*) => MergeStrategy.discard
+  case PathList("META-INF", xs@_*) =>
+    (xs map {_.toLowerCase}) match {
+      case "services" :: xs =>
+        MergeStrategy.filterDistinctLines
+      case _ => MergeStrategy.discard
+    }
   case _                        => MergeStrategy.first
 }

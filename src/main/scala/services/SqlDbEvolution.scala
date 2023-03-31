@@ -16,10 +16,10 @@ class SqlDbEvolution(flyway: Flyway) {
 
 object SqlDbEvolution {
 
-  def apply(): SqlDbEvolution = {
+  def apply(address: String, port: String, name: String): SqlDbEvolution = {
     lazy val flyway: Flyway = Flyway
       .configure()
-      .dataSource("jdbc:", "", "")
+      .dataSource(s"jdbc:postgresql://$address:$port/$name", "postgres", "123456")
       .locations("flyway")
       .load()
 

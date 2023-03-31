@@ -3,7 +3,7 @@ import canoe.models.messages.{TelegramMessage, TextMessage}
 import canoe.models._
 import canoe.syntax._
 import cats.Applicative
-import cats.effect.{IO, IOApp, Sync}
+import cats.effect.{ExitCode, IO, IOApp, Sync}
 import cats.syntax.applicative._
 import domain.UserInfo
 import doobie.Transactor
@@ -12,20 +12,28 @@ import repositories.{PidorRepo, RpsRepo}
 import services.{MessageServices, PidorStorageServices, Program, RpsStorageServices, SqlDbEvolution}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Try
 
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
-object Main extends IOApp.Simple {
+object Main extends IOApp {
   val token: String = ""
 
-  def run: IO[Unit] = for {
+  override def run(args: List[String]): IO[ExitCode] = {
+    val addressDB = args.headOption.getOrElse("localhost")
+    val port = Try(args.tail.head).getOrElse("8888")
+    val nameDB = Try(args.tail.tail.head).getOrElse("testdb")
+    run2(addressDB, port, nameDB).as(ExitCode.Success)
+  }
+
+  def run2(address: String, port: String, name: String): IO[Unit] = for {
     transactor <- IO(Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
-      "",
-      "",
-      ""
+      s"""jdbc:postgresql://$address:$port/$name""",
+      "postgres",
+      "123456"
     ))
-    _ <- IO.fromFuture(IO(SqlDbEvolution().runEvolutions()))
+    _ <- IO.fromFuture(IO(SqlDbEvolution(address, port, name).runEvolutions()))
     rpsRepo = new RpsRepo[IO](transactor)
     service = new RpsStorageServices[IO](rpsRepo)
     pidorRepo = new PidorRepo[IO](transactor)
@@ -123,4 +131,6 @@ object Main extends IOApp.Simple {
       case _ => Applicative[F].unit
     }
   }
+
+
 }
