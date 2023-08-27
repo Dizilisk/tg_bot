@@ -9,6 +9,7 @@ import domain.UserInfo
 import doobie.Transactor
 import fs2.{Pipe, Stream}
 import repositories.{PidorRepo, RpsRepo}
+import routes.MainRoute
 import services.{MessageServices, PidorStorageServices, Program, RpsStorageServices, SqlDbEvolution}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -17,7 +18,7 @@ import scala.util.Try
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp {
-  val token: String = ""
+  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
 
   override def run(args: List[String]): IO[ExitCode] = {
     val addressDB = args.headOption.getOrElse("localhost")
@@ -40,11 +41,14 @@ object Main extends IOApp {
     pidor = new PidorStorageServices[IO](pidorRepo)
     msgService = new MessageServices[IO](service)
     program = new Program[IO](service, pidor, msgService)
+    server = Stream.eval(MainRoute.run)
     result <- Stream
       .resource(TelegramClient[IO](token))
       .flatMap(implicit client => Bot.polling[IO].follow(echos(program)).through(answerCallbacks(program)))
+      .merge(server)
       .compile
       .drain
+
   } yield result
 
   def echos[F[_] : TelegramClient : Sync](program: Program[F]): Scenario[F, Unit] =
