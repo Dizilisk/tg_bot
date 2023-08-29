@@ -18,7 +18,7 @@ import scala.util.Try
 /** Example of echos bot that will answer to you with the message you've sent to him
  */
 object Main extends IOApp {
-  val token: String = "5668930687:AAEzCyL4Y-cQoLph4EpW_y_7JX7c4SMA9TQ"
+  val token: String = ""
 
   override def run(args: List[String]): IO[ExitCode] = {
     val addressDB = args.headOption.getOrElse("localhost")
