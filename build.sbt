@@ -19,6 +19,8 @@ libraryDependencies += "org.typelevel" %% "log4cats-slf4j"   % "2.5.0"
 
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.5" % Runtime
 
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5"
+
 libraryDependencies += "org.flywaydb" % "flyway-core" % "9.10.0"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15" % Test
@@ -44,6 +46,8 @@ libraryDependencies ++= Seq(
   // Optional for string interpolation to JSON model
   "io.circe" %% "circe-literal" % "0.14.5"
 )
+
+
 
 
 enablePlugins(DockerPlugin)
